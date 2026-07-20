@@ -4,13 +4,19 @@ base_llm:
   temperature: 0.8
 
 judge_llm:
+  provider: "openai"
   model: "gpt-4o-mini"
+
+# To use Claude later:
+# judge_llm:
+#   provider: "anthropic"
+#   model: "YOUR_CLAUDE_MODEL_NAME"
 
 data:
   train_en_csv: "dspy_cn/data/Generate_CN_MultiThreading - Train English.csv"
   train_ta_csv: "dspy_cn/data/Generate_CN_MultiThreading - Train Tamil.csv"
-  test_en_csv:  "dspy_cn/data/Generate_CN_MultiThreading - Test English.csv"
-  test_ta_csv:  "dspy_cn/data/Generate_CN_MultiThreading - Test Tamil.csv"
+  test_en_csv: "dspy_cn/data/Generate_CN_MultiThreading - Test English.csv"
+  test_ta_csv: "dspy_cn/data/Generate_CN_MultiThreading - Test Tamil.csv"
 
 optimization:
   train_sample_size: 180
