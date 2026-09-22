@@ -9,19 +9,19 @@ Year: 2026
 # dspy_cn/dspy_optimize.py
 # Runs COPRO optimization for Tamil (English kept commented).
 import dspy
-import yaml
 import json
 import os
 import random
 import pandas as pd
 from datetime import datetime
 from dspy.adapters import JSONAdapter
+from .model_config import load_config, resolve_package_path
 
-from dspy_cn.base_llm import configure_gpt4o
-from dspy_cn.dspy_program import (
+from .base_llm import configure_dspy_lm
+from .dspy_program import (
     EnglishCNProgram, TamilCNProgram,
 )
-from dspy_cn.dspy_metric import cn_metric_rewards
+from .dspy_metric import cn_metric_rewards
 
 
 # ── Data Loading ───────────────────────────────────────────────
@@ -151,21 +151,17 @@ def run_copro(program, trainset, out_path, audit_path):
 # ── Main ───────────────────────────────────────────────────────
 
 def main():
-    with open("dspy_cn/config.yaml", "r") as f:
-        cfg = yaml.safe_load(f)
-
-    # ── LLM Config ──
-    llm_cfg = cfg["base_llm"]
-    configure_gpt4o(model=llm_cfg["model"])
-
-    # ✅ CRITICAL: required for DSPy stability
-    dspy.settings.configure(
+    cfg = load_config()
+    configure_dspy_lm(
+        cfg["base_llm"],
+        adapter=JSONAdapter(),
         enforce_json=True,
-        adapter=JSONAdapter()
     )
 
-    os.makedirs("dspy_cn/outputs", exist_ok=True)
-    os.makedirs("dspy_cn/logs", exist_ok=True)
+    output_dir = resolve_package_path("outputs")
+    log_dir = resolve_package_path("logs")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     opt_cfg = cfg["optimization"]
     sample_size = opt_cfg.get("train_sample_size", 30)
@@ -176,14 +172,14 @@ def main():
     print("ENGLISH — COPRO")
     print("=" * 60)
 
-    en_train = load_trainset_en(cfg["data"]["train_en_csv"], sample_size)
+    en_train = load_trainset_en(str(resolve_package_path(cfg["data"]["train_en_csv"])), sample_size)
     en_program = EnglishCNProgram()
 
     run_copro(
         en_program,
         en_train,
-        out_path="dspy_cn/outputs/en_copro_optimized.json",
-        audit_path="dspy_cn/logs/en_copro_audit.json",
+        out_path=str(output_dir / "en_copro_optimized.json"),
+        audit_path=str(log_dir / "en_copro_audit.json"),
     )
     
 
@@ -192,14 +188,14 @@ def main():
     print("TAMIL — COPRO")
     print("=" * 60)
 
-    ta_train = load_trainset_ta(cfg["data"]["train_ta_csv"], sample_size)
+    ta_train = load_trainset_ta(str(resolve_package_path(cfg["data"]["train_ta_csv"])), sample_size)
     ta_program = TamilCNProgram()
 
     run_copro(
         ta_program,
         ta_train,
-        out_path="dspy_cn/outputs/ta_copro_optimized.json",
-        audit_path="dspy_cn/logs/ta_copro_audit.json",
+        out_path=str(output_dir / "ta_copro_optimized.json"),
+        audit_path=str(log_dir / "ta_copro_audit.json"),
     )
 
     print("\n" + "=" * 60)

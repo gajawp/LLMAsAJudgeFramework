@@ -1,0 +1,2 @@
+dataset,rows,judge_provider,judge_model,batch_size,dataset_distinct2,batch_failures
+dspy_cn/Multitarget-CONAN.csv,1000,ollama,llama3.1:8b,8,0.6431305318555139,0

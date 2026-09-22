@@ -1,27 +1,58 @@
+# Swap providers/models only in these two blocks.
 base_llm:
-  model: "gpt-4o"
-  max_tokens: 250
+  provider: ollama
+  model: qwen2.5:14b
   temperature: 0.8
+  max_tokens: 250
 
 judge_llm:
-  provider: "openai"
-  model: "gpt-4o-mini"
+  provider: ollama
+  model: qwen2.5:14b
+  temperature: 0.0
+  max_tokens: 1200
+  keep_alive: 30m
+  timeout: 300
 
-# To use Claude later:
+# OpenAI example:
 # judge_llm:
-#   provider: "anthropic"
-#   model: "YOUR_CLAUDE_MODEL_NAME"
+#   provider: openai
+#   model: gpt-4o-mini
+#   api_key_env: OPENAI_API_KEY
+
+# Anthropic example:
+# judge_llm:
+#   provider: anthropic
+#   model: claude-sonnet-4-5
+#   api_key_env: ANTHROPIC_API_KEY
+
+# OpenAI-compatible server example:
+# judge_llm:
+#   provider: openai_compatible
+#   model: meta-llama/Llama-3.1-8B-Instruct
+#   api_base: http://localhost:8000/v1
+#   api_key_env: LOCAL_LLM_API_KEY  # optional for local servers
 
 data:
-  train_en_csv: "dspy_cn/data/Generate_CN_MultiThreading - Train English.csv"
-  train_ta_csv: "dspy_cn/data/Generate_CN_MultiThreading - Train Tamil.csv"
-  test_en_csv: "dspy_cn/data/Generate_CN_MultiThreading - Test English.csv"
-  test_ta_csv: "dspy_cn/data/Generate_CN_MultiThreading - Test Tamil.csv"
+  train_en_csv: "data/Generate_CN_MultiThreading - Train English.csv"
+  train_ta_csv: "data/Generate_CN_MultiThreading - Train Tamil.csv"
+  test_en_csv: "data/Generate_CN_MultiThreading - Test English.csv"
+  test_ta_csv: "data/Generate_CN_MultiThreading - Test Tamil.csv"
 
 optimization:
   train_sample_size: 180
   num_trials: 5
 
+evaluation:
+  input_file: Multitarget-CONAN.csv
+  output_file: outputs/Multitarget-CONAN_all_scored.csv
+  summary_file: outputs/Multitarget-CONAN_evaluation_summary.csv
+  counter_narrative_column: COUNTER_NARRATIVE
+  max_rows: null
+  batch_size: 8
+  checkpoint_every_batches: 10
+  llm_weight: 0.5
+  reward_weight: 0.5
+
 output:
-  predictions_en: "dspy_cn/outputs/predictions_en.csv"
-  predictions_ta: "dspy_cn/outputs/predictions_ta.csv"
+  predictions_en: outputs/predictions_en.csv
+  predictions_ta: outputs/predictions_ta.csv

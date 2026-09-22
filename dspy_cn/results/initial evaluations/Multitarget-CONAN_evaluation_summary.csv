@@ -1,0 +1,2 @@
+dataset,rows,judge_provider,judge_model,batch_size,dataset_distinct2
+Multitarget-CONAN.csv,5003,ollama,llama3.1:8b,8,0.41538500348971164

@@ -1,0 +1,2 @@
+dataset,rows,judge_provider,judge_model,batch_size,dataset_distinct2,batch_failures
+dspy_cn/Generate_CN.csv,3313,ollama,qwen2.5:14b,8,0.24972455509262975,0

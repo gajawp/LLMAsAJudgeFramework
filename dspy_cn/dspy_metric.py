@@ -1,24 +1,7 @@
-# dspy_cn/dspy_metric.py
-# Two metric modes:
-#   1. LLM-as-judge (GPT-4o-mini with shared task rubric)
-#   2. Reward-based (using subset reward functions for PRS/CCNC/TS)
-# Both return float 0-1 for DSPy optimizers.
-import json
-import os
-import traceback
-from openai import OpenAI
+from functools import lru_cache
 
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    return _client
-
-
-# ── LLM-as-Judge ───────────────────────────────────────────────
+from .llm_clients import get_judge_client
+from .model_config import ModelConfig, load_config, DEFAULT_CONFIG_PATH
 
 PRS_RUBRIC = """Criterion: Does the generated counter-narrative reflect a polite and respectful tone relevant to LGBTQ+ individuals and communities?
 0 = No polite or respectful language used in the counter-narrative framing
@@ -36,9 +19,17 @@ QS_RUBRIC = """Criterion: Does the counter-narrative demonstrate richness, gramm
 2 = Clear, well-written, rich in content, and strongly related to the harmful speech"""
 
 
-def llm_judge(hate_speech: str, counter_narrative: str,
-              model: str = "gpt-4o-mini") -> dict:
-    """Score a single CN against the 3 shared task rubrics."""
+@lru_cache(maxsize=4)
+def _judge_client(config_path: str = str(DEFAULT_CONFIG_PATH)):
+    config = load_config(config_path)
+    return get_judge_client(ModelConfig.from_mapping(config["judge_llm"]))
+
+
+def llm_judge(
+    hate_speech: str,
+    counter_narrative: str,
+    config_path: str = str(DEFAULT_CONFIG_PATH),
+) -> dict:
     prompt = f"""You are an impartial judge. Score the counter-narrative on THREE criteria.
 
 HATE SPEECH:
@@ -57,53 +48,36 @@ COUNTER-NARRATIVE:
 {QS_RUBRIC}
 
 Return ONLY valid JSON with integer scores:
-{{"PRS": <0-2>, "CCNC": <0-2>, "QS": <0-2>}}"""
+{{"PRS": 0, "CCNC": 0, "QS": 0}}"""
 
     try:
-        resp = _get_client().chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=50,
-        )
-        content = resp.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        scores = json.loads(content)
-        prs = int(scores.get("PRS", 0))
-        ccnc = int(scores.get("CCNC", 0))
-        qs = int(scores.get("QS", 0))
-    except Exception as e:
-        print(f"[WARN] Judge parse error: {e}")
+        scores = _judge_client(config_path).generate_json(prompt)
+        prs = max(0, min(2, int(scores.get("PRS", 0))))
+        ccnc = max(0, min(2, int(scores.get("CCNC", 0))))
+        qs = max(0, min(2, int(scores.get("QS", 0))))
+    except Exception as exc:
+        print(f"[WARN] Judge error: {exc}")
         prs, ccnc, qs = 1, 1, 1
 
     total = prs + ccnc + qs
     return {"PRS": prs, "CCNC": ccnc, "QS": qs, "total": total, "pct": total / 6 * 100}
 
 
-# ── DSPy Metric Functions ──────────────────────────────────────
-
 def cn_metric_llm_judge(example, prediction, trace=None) -> float:
-    """DSPy metric using LLM-as-judge. Returns 0-1."""
-    hs = str(example.hate_speech)
-    cn = str(prediction.counter_narrative)
-    scores = llm_judge(hs, cn)
+    scores = llm_judge(str(example.hate_speech), str(prediction.counter_narrative))
     return scores["total"] / 6.0
 
 
 def cn_metric_rewards(example, prediction, trace=None) -> float:
-    """DSPy metric using reward functions. Returns 0-1.
-    Lazily loads the evaluator on first call."""
     global _reward_evaluator
     if "_reward_evaluator" not in globals() or _reward_evaluator is None:
         from dspy_cn.evaluator import RewardEvaluator
         globals()["_reward_evaluator"] = RewardEvaluator()
 
-    hs = str(example.hate_speech)
-    cn = str(prediction.counter_narrative)
-    gt = str(example.ground_truth) if hasattr(example, "ground_truth") else None
-
-    scores = _reward_evaluator.score_single(hs, cn, gt)
+    ground_truth = str(example.ground_truth) if hasattr(example, "ground_truth") else None
+    scores = _reward_evaluator.score_single(
+        str(example.hate_speech),
+        str(prediction.counter_narrative),
+        ground_truth,
+    )
     return float(scores["combined"])

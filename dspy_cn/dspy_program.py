@@ -34,10 +34,12 @@ Goal:
 - Encourage respectful reflection.
 """
 
+    hate_speech = dspy.InputField(
+        desc="a hateful or offensive comment"
+    )
     counter_narrative = dspy.OutputField(
-    desc="a natural Tamil counter narrative (2-3 sentences)",
-    
-)
+        desc="a natural English counter-narrative in exactly 2-3 sentences"
+    )
 
 
 

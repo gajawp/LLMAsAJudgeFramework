@@ -10,21 +10,19 @@ Year: 2026
 # Generate CNs for test sets, evaluate with BOTH LLM judge AND reward functions.
 # Outputs include: PRS, CCNC, QS, Distinct-2, BERTScore, all individual rewards.
 import os
-import yaml
-import json
 import pandas as pd
 from tqdm import tqdm
-from dspy_cn.base_llm import configure_gpt4o
-from dspy_cn.dspy_program import (
+from .base_llm import configure_dspy_lm
+from .dspy_program import (
     EnglishCNProgram, TamilCNProgram,
-    EnglishCNSignature, TamilCNSignature,
 )
-from dspy_cn.dspy_metric import llm_judge
-from dspy_cn.evaluator import RewardEvaluator
+from .dspy_metric import llm_judge
+from .evaluator import RewardEvaluator
+from .model_config import load_config, resolve_package_path, DEFAULT_CONFIG_PATH
 
 
 def generate_for_dataset(program, df, hs_col, id_col, evaluator,
-                         judge_model="gpt-4o-mini"):
+                         config_path="config.yaml"):
     """Generate CN for each row, score with LLM judge + reward functions."""
     results = []
     cn_list, hs_list, gt_list = [], [], []
@@ -42,7 +40,7 @@ def generate_for_dataset(program, df, hs_col, id_col, evaluator,
             cn = "Every person deserves dignity and respect regardless of identity."
 
         # LLM Judge scores
-        judge_scores = llm_judge(hs, cn, model=judge_model)
+        judge_scores = llm_judge(hs, cn, config_path=config_path)
 
         # Reward function scores
         reward_scores = evaluator.score_single(hs, cn, gt)
@@ -91,7 +89,7 @@ def print_summary(df, label, batch_d2, avg_bs):
     print(f"\n{'='*60}")
     print(f"  {label} — {n} examples")
     print(f"{'='*60}")
-    print(f"  --- LLM Judge (GPT-4o-mini) ---")
+    print(f"  --- Configured LLM Judge ---")
     print(f"  PRS  avg: {df['judge_PRS'].mean():.3f} / 2")
     print(f"  CCNC avg: {df['judge_CCNC'].mean():.3f} / 2")
     print(f"  QS   avg: {df['judge_QS'].mean():.3f} / 2")
@@ -110,26 +108,24 @@ def print_summary(df, label, batch_d2, avg_bs):
 
 
 def main():
-    with open("dspy_cn/config.yaml", "r") as f:
-        cfg = yaml.safe_load(f)
+    cfg = load_config()
 
     llm_cfg = cfg["base_llm"]
 
-    judge_model = cfg["judge_llm"]["model"]
-
-    configure_gpt4o(model=llm_cfg["model"])
+    configure_dspy_lm(llm_cfg)
 
     evaluator = RewardEvaluator()
-    os.makedirs("dspy_cn/outputs", exist_ok=True)
+    output_dir = resolve_package_path("outputs")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # # ── English ──
     print("\n[1/2] Generating English counter-narratives...")
-    test_en = pd.read_csv(cfg["data"]["test_en_csv"])
+    test_en = pd.read_csv(resolve_package_path(cfg["data"]["test_en_csv"]))
 
     # Try loading optimized program
     en_program = EnglishCNProgram()
     for opt_path in [
-                     "dspy_cn/outputs/en_copro_optimized.json"]:
+                     str(output_dir / "en_copro_optimized.json")]:
         if os.path.exists(opt_path):
             print(f"[OK] Loading optimized program: {opt_path}")
             try:
@@ -139,17 +135,17 @@ def main():
                 print(f"[WARN] Could not load {opt_path}: {e}")
 
     df_en, d2_en, bs_en = generate_for_dataset(
-        en_program, test_en, "text", "Id", evaluator, judge_model)
-    df_en.to_csv("dspy_cn/outputs/predictions_en.csv", index=False)
+        en_program, test_en, "text", "Id", evaluator, str(DEFAULT_CONFIG_PATH))
+    df_en.to_csv(output_dir / "predictions_en.csv", index=False)
     print_summary(df_en, "ENGLISH", d2_en, bs_en)
 
     # ── Tamil ──
     print("\n[2/2] Generating Tamil counter-narratives...")
-    test_ta = pd.read_csv(cfg["data"]["test_ta_csv"])
+    test_ta = pd.read_csv(resolve_package_path(cfg["data"]["test_ta_csv"]))
 
     ta_program = TamilCNProgram()
     for opt_path in [
-                     "dspy_cn/outputs/ta_copro_optimized.json"]:
+                     str(output_dir / "ta_copro_optimized.json")]:
         if os.path.exists(opt_path):
             print(f"[OK] Loading optimized program: {opt_path}")
             try:
@@ -159,15 +155,15 @@ def main():
                 print(f"[WARN] Could not load {opt_path}: {e}")
 
     df_ta, d2_ta, bs_ta = generate_for_dataset(
-        ta_program, test_ta, "text", "Id", evaluator, judge_model)
-    df_ta.to_csv("dspy_cn/outputs/predictions_ta.csv", index=False)
+        ta_program, test_ta, "text", "Id", evaluator, str(DEFAULT_CONFIG_PATH))
+    df_ta.to_csv(output_dir / "predictions_ta.csv", index=False)
     print_summary(df_ta, "TAMIL", d2_ta, bs_ta)
 
     # ── Submission CSVs ──
     sub_en = df_en[["Id", "generated_cn"]].rename(columns={"generated_cn": "counter_narrative"})
-    sub_en.to_csv("dspy_cn/outputs/submission_en.csv", index=False)
+    sub_en.to_csv(output_dir / "submission_en.csv", index=False)
     sub_ta = df_ta[["Id", "generated_cn"]].rename(columns={"generated_cn": "counter_narrative"})
-    sub_ta.to_csv("dspy_cn/outputs/submission_ta.csv", index=False)
+    sub_ta.to_csv(output_dir / "submission_ta.csv", index=False)
 
     print("\n[OK] All files saved to dspy_cn/outputs/")
 
